@@ -276,86 +276,6 @@ wait_for_docker() {
   die "Docker daemon did not become ready at $DOCKER_HOST"
 }
 
-install_helm() {
-  if is_truthy "${SKIP_HELM_INSTALL:-}" || is_truthy "${SKIP_K8S_TOOLING_INSTALL:-}"; then
-    log "Skipping Helm install"
-    return 0
-  fi
-
-  if have helm; then
-    log "Helm already installed"
-    return 0
-  fi
-
-  if ! have curl || ! have bash; then
-    warn "curl or bash is unavailable; skipping Helm install"
-    return 0
-  fi
-
-  log "Installing Helm"
-  helm_installer="${TMPDIR:-/tmp}/get-helm-3.$$"
-  if ! curl -fsSL -o "$helm_installer" https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3; then
-    rm -f "$helm_installer"
-    warn "Helm installer download failed"
-    return 0
-  fi
-  chmod 0755 "$helm_installer"
-  HELM_INSTALL_DIR="$HOME/.local/bin" USE_SUDO=false "$helm_installer" --no-sudo || warn "Helm install failed"
-  rm -f "$helm_installer"
-}
-
-install_kubectl() {
-  if is_truthy "${SKIP_KUBECTL_INSTALL:-}" || is_truthy "${SKIP_K8S_TOOLING_INSTALL:-}"; then
-    log "Skipping kubectl install"
-    return 0
-  fi
-
-  if have kubectl; then
-    log "kubectl already installed"
-    return 0
-  fi
-
-  arch=$(tool_arch) || return 0
-  case "$arch" in
-    amd64|arm64) ;;
-    *)
-      warn "kubectl install does not support mapped architecture: $arch"
-    return 0
-      ;;
-  esac
-
-  if ! have curl || ! have sha256sum; then
-    warn "curl or sha256sum is unavailable; skipping kubectl install"
-    return 0
-  fi
-
-  if ! kubectl_version=$(curl -fsSL https://dl.k8s.io/release/stable.txt); then
-    warn "could not resolve latest kubectl version"
-    return 0
-  fi
-  kubectl_tmp="${TMPDIR:-/tmp}/kubectl.$$"
-  checksum_tmp="${TMPDIR:-/tmp}/kubectl.sha256.$$"
-  log "Installing kubectl $kubectl_version"
-  if ! curl -fsSL -o "$kubectl_tmp" "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${arch}/kubectl"; then
-    rm -f "$kubectl_tmp" "$checksum_tmp"
-    warn "kubectl download failed"
-    return 0
-  fi
-  if ! curl -fsSL -o "$checksum_tmp" "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${arch}/kubectl.sha256"; then
-    rm -f "$kubectl_tmp" "$checksum_tmp"
-    warn "kubectl checksum download failed"
-    return 0
-  fi
-  if ! printf '%s  %s\n' "$(cat "$checksum_tmp")" "$kubectl_tmp" | sha256sum -c -; then
-    rm -f "$kubectl_tmp" "$checksum_tmp"
-    warn "kubectl checksum verification failed"
-    return 0
-  fi
-  chmod 0755 "$kubectl_tmp"
-  mv "$kubectl_tmp" "$HOME/.local/bin/kubectl"
-  rm -f "$checksum_tmp"
-}
-
 install_github_cli() {
   if is_truthy "${SKIP_GH_INSTALL:-}"; then
     log "Skipping GitHub CLI install because SKIP_GH_INSTALL=${SKIP_GH_INSTALL}"
@@ -419,50 +339,6 @@ install_yq() {
 
   log "Installing yq"
   download_local_bin yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${arch}" || true
-}
-
-install_k9s() {
-  if is_truthy "${SKIP_K9S_INSTALL:-}" || is_truthy "${SKIP_K8S_TOOLING_INSTALL:-}"; then
-    log "Skipping k9s install"
-    return 0
-  fi
-
-  if have k9s; then
-    log "k9s already installed"
-    return 0
-  fi
-
-  arch=$(tool_arch) || return 0
-  case "$arch" in
-    amd64|arm64) ;;
-    *)
-      warn "k9s install does not support mapped architecture: $arch"
-    return 0
-      ;;
-  esac
-
-  if ! have curl || ! have tar; then
-    warn "curl or tar is unavailable; skipping k9s install"
-    return 0
-  fi
-
-  log "Installing k9s"
-  k9s_archive="${TMPDIR:-/tmp}/k9s.$$"
-  k9s_dir="${TMPDIR:-/tmp}/k9s-dir.$$"
-  mkdir -p "$k9s_dir"
-  if ! curl -fsSL -o "$k9s_archive" "https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_${arch}.tar.gz"; then
-    rm -rf "$k9s_archive" "$k9s_dir"
-    warn "k9s download failed"
-    return 0
-  fi
-  if ! tar -xzf "$k9s_archive" -C "$k9s_dir" k9s; then
-    rm -rf "$k9s_archive" "$k9s_dir"
-    warn "k9s archive extraction failed"
-    return 0
-  fi
-  chmod 0755 "$k9s_dir/k9s"
-  mv "$k9s_dir/k9s" "$HOME/.local/bin/k9s"
-  rm -rf "$k9s_archive" "$k9s_dir"
 }
 
 export DEBIAN_FRONTEND=noninteractive
@@ -529,11 +405,8 @@ else
 fi
 
 install_base_tooling
-install_helm
-install_kubectl
 install_github_cli
 install_yq
-install_k9s
 install_docker_cli
 
 log "Coder dotfiles installed."
