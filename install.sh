@@ -276,64 +276,6 @@ wait_for_docker() {
   die "Docker daemon did not become ready at $DOCKER_HOST"
 }
 
-install_nvm() {
-  if is_truthy "${SKIP_NVM_INSTALL:-}"; then
-    log "Skipping NVM install because SKIP_NVM_INSTALL=${SKIP_NVM_INSTALL}"
-    return 0
-  fi
-
-  if ! have curl; then
-    warn "curl is unavailable; skipping NVM install"
-    return 0
-  fi
-
-  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-  nvm_version="${NVM_VERSION:-v0.40.4}"
-  if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-    log "Installing NVM $nvm_version"
-    mkdir -p "$NVM_DIR"
-    nvm_installer="${TMPDIR:-/tmp}/nvm-install.$$"
-    if ! curl -fsSL -o "$nvm_installer" "https://raw.githubusercontent.com/nvm-sh/nvm/${nvm_version}/install.sh"; then
-      rm -f "$nvm_installer"
-      warn "NVM installer download failed"
-      return 0
-    fi
-    if ! PROFILE=/dev/null sh "$nvm_installer"; then
-      rm -f "$nvm_installer"
-      warn "NVM install failed"
-      return 0
-    fi
-    rm -f "$nvm_installer"
-  else
-    log "NVM already installed"
-  fi
-
-  if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-    warn "NVM was not installed at $NVM_DIR"
-    return 0
-  fi
-
-  # shellcheck source=/dev/null
-  . "$NVM_DIR/nvm.sh"
-
-  if is_truthy "${SKIP_NODE_INSTALL:-}"; then
-    log "Skipping Node install because SKIP_NODE_INSTALL=${SKIP_NODE_INSTALL}"
-    return 0
-  fi
-
-  node_version="${NODE_VERSION:-lts/*}"
-  log "Installing Node $node_version with NVM"
-  if ! nvm install "$node_version"; then
-    warn "Node install failed for $node_version"
-    return 0
-  fi
-  nvm alias default "$node_version" >/dev/null
-
-  if have corepack; then
-    corepack enable >/dev/null 2>&1 || warn "corepack enable failed"
-  fi
-}
-
 install_helm() {
   if is_truthy "${SKIP_HELM_INSTALL:-}" || is_truthy "${SKIP_K8S_TOOLING_INSTALL:-}"; then
     log "Skipping Helm install"
@@ -587,7 +529,6 @@ else
 fi
 
 install_base_tooling
-install_nvm
 install_helm
 install_kubectl
 install_github_cli

@@ -11,7 +11,6 @@ This repo is intentionally smaller than a normal workstation bootstrap. It only:
 - installs a small developer toolbelt through apt where available: `git`,
   `curl`, `jq`, `ripgrep`, `fd`, `bat`, `fzf`, `direnv`, `python3`, `pipx`,
   `make`, `build-essential`, and supporting archive/network tools;
-- installs NVM and Node LTS;
 - installs Kubernetes/devops tools: Helm, kubectl, k9s, yq, and GitHub CLI;
 - installs Docker client tooling only when a Coder template exposes a Docker
   sidecar through `DOCKER_HOST`.
@@ -26,8 +25,6 @@ tooling even when `DOCKER_HOST` is present.
 Useful skip switches:
 
 - `SKIP_APT_TOOLING_INSTALL=1`
-- `SKIP_NVM_INSTALL=1`
-- `SKIP_NODE_INSTALL=1`
 - `SKIP_K8S_TOOLING_INSTALL=1`
 - `SKIP_HELM_INSTALL=1`
 - `SKIP_KUBECTL_INSTALL=1`
