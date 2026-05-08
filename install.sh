@@ -73,6 +73,82 @@ link_file() {
   ln -sfn "$src" "$dst"
 }
 
+skip_docker_install() {
+  case "${SKIP_DOCKER_INSTALL:-}" in
+    1|true|TRUE|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+install_docker_cli() {
+  if skip_docker_install; then
+    log "Skipping Docker client install because SKIP_DOCKER_INSTALL=${SKIP_DOCKER_INSTALL}"
+    return 0
+  fi
+
+  if [ -z "${DOCKER_HOST:-}" ]; then
+    log "Docker sidecar not configured; skipping Docker client install"
+    return 0
+  fi
+
+  if have docker && docker buildx version >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    log "Docker client tooling already installed"
+    wait_for_docker
+    return 0
+  fi
+
+  if ! have apt-get; then
+    warn "apt-get is unavailable; skipping Docker client install"
+    return 0
+  fi
+
+  if ! as_root true >/dev/null 2>&1; then
+    warn "sudo/root access unavailable; skipping Docker client install"
+    return 0
+  fi
+
+  docker_codename=$(awk -F= '/^VERSION_CODENAME=/{ gsub(/"/, "", $2); print $2 }' /etc/os-release)
+  if [ -z "$docker_codename" ]; then
+    warn "could not determine Ubuntu codename; skipping Docker client install"
+    return 0
+  fi
+
+  log "Installing Docker client tooling for $DOCKER_HOST"
+  as_root apt-get update -yq
+  as_root apt-get install -yq ca-certificates curl gnupg
+  as_root install -m 0755 -d /etc/apt/keyrings
+  docker_gpg="${TMPDIR:-/tmp}/docker.asc.$$"
+  curl -fsSL -o "$docker_gpg" https://download.docker.com/linux/ubuntu/gpg
+  as_root install -m 0644 "$docker_gpg" /etc/apt/keyrings/docker.asc
+  rm -f "$docker_gpg"
+  as_root chmod a+r /etc/apt/keyrings/docker.asc
+  docker_arch=$(dpkg --print-architecture)
+  printf '%s\n' "deb [arch=$docker_arch signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $docker_codename stable" | as_root tee /etc/apt/sources.list.d/docker.list >/dev/null
+  as_root apt-get update -yq
+  as_root apt-get install -yq docker-ce-cli docker-buildx-plugin docker-compose-plugin
+
+  wait_for_docker
+}
+
+wait_for_docker() {
+  if [ -z "${DOCKER_HOST:-}" ] || ! have docker; then
+    return 0
+  fi
+
+  attempts=0
+  while [ "$attempts" -lt 60 ]; do
+    if docker info >/tmp/docker-info.log 2>&1; then
+      log "Docker daemon is ready at $DOCKER_HOST"
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+
+  cat /tmp/docker-info.log >&2
+  die "Docker daemon did not become ready at $DOCKER_HOST"
+}
+
 export DEBIAN_FRONTEND=noninteractive
 
 USER_NAME=${USER:-}
@@ -135,5 +211,7 @@ if [ -n "$ZSH_PATH" ]; then
 else
   log "zsh is not installed yet; leaving shell selection to the Coder template"
 fi
+
+install_docker_cli
 
 log "Coder dotfiles installed."
