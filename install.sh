@@ -95,25 +95,6 @@ esac
 DOTFILES_DIR=$(CDPATH= cd "$script_dir" && pwd)
 unset script_dir
 
-missing_packages=""
-have zsh || missing_packages="$missing_packages zsh"
-have git || missing_packages="$missing_packages git"
-have curl || missing_packages="$missing_packages curl"
-[ -e /etc/ssl/certs/ca-certificates.crt ] || missing_packages="$missing_packages ca-certificates"
-
-if [ -n "$missing_packages" ]; then
-  have apt-get || die "missing required packages:$missing_packages, and apt-get is unavailable"
-  log "Installing missing packages:$missing_packages"
-  as_root apt-get update -yq || die "apt-get update failed"
-  # shellcheck disable=SC2086
-  as_root apt-get install -yq $missing_packages || die "apt-get install failed"
-fi
-
-ZSH_PATH=$(command -v zsh || true)
-if [ -z "$ZSH_PATH" ]; then
-  die "zsh is not installed"
-fi
-
 mkdir -p "$HOME/.local/bin" "$HOME/.cache/zsh" "$HOME/work"
 
 link_file "$DOTFILES_DIR/.zshenv" "$HOME/.zshenv"
@@ -127,27 +108,32 @@ if [ ! -f "$HOME/.zshenv.local" ]; then
   chmod 600 "$HOME/.zshenv.local"
 fi
 
-if [ -f /etc/shells ] && ! grep -qxF "$ZSH_PATH" /etc/shells; then
-  append_root_line "$ZSH_PATH" /etc/shells || warn "could not add $ZSH_PATH to /etc/shells"
-fi
+ZSH_PATH=$(command -v zsh || true)
+if [ -n "$ZSH_PATH" ]; then
+  if [ -f /etc/shells ] && ! grep -qxF "$ZSH_PATH" /etc/shells; then
+    append_root_line "$ZSH_PATH" /etc/shells || warn "could not add $ZSH_PATH to /etc/shells"
+  fi
 
-current_shell=""
-if have getent; then
-  current_shell=$(getent passwd "$USER_NAME" | awk -F: '{ print $7 }')
-else
-  current_shell=$(awk -F: -v user="$USER_NAME" '$1 == user { print $7 }' /etc/passwd)
-fi
-
-if [ "$current_shell" != "$ZSH_PATH" ]; then
-  if have chsh && as_root chsh -s "$ZSH_PATH" "$USER_NAME"; then
-    log "Changed login shell for $USER_NAME to $ZSH_PATH"
-  elif have usermod && as_root usermod -s "$ZSH_PATH" "$USER_NAME"; then
-    log "Changed login shell for $USER_NAME to $ZSH_PATH"
+  current_shell=""
+  if have getent; then
+    current_shell=$(getent passwd "$USER_NAME" | awk -F: '{ print $7 }')
   else
-    warn "could not change login shell for $USER_NAME; zsh is installed at $ZSH_PATH"
+    current_shell=$(awk -F: -v user="$USER_NAME" '$1 == user { print $7 }' /etc/passwd)
+  fi
+
+  if [ "$current_shell" != "$ZSH_PATH" ]; then
+    if have chsh && as_root chsh -s "$ZSH_PATH" "$USER_NAME"; then
+      log "Changed login shell for $USER_NAME to $ZSH_PATH"
+    elif have usermod && as_root usermod -s "$ZSH_PATH" "$USER_NAME"; then
+      log "Changed login shell for $USER_NAME to $ZSH_PATH"
+    else
+      warn "could not change login shell for $USER_NAME; zsh is installed at $ZSH_PATH"
+    fi
+  else
+    log "Login shell already set to $ZSH_PATH"
   fi
 else
-  log "Login shell already set to $ZSH_PATH"
+  warn "zsh is not installed yet; the Coder template should install it"
 fi
 
 log "Coder dotfiles installed."
