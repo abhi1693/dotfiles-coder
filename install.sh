@@ -133,7 +133,7 @@ if [ -n "$ZSH_PATH" ]; then
     log "Login shell already set to $ZSH_PATH"
   fi
 else
-  warn "zsh is not installed yet; the Coder template should install it"
+  log "zsh is not installed yet; leaving shell selection to the Coder template"
 fi
 
 log "Coder dotfiles installed."
