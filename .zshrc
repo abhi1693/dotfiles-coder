@@ -25,6 +25,18 @@ if [ -f "${HOME}/.fzf.zsh" ]; then
   . "${HOME}/.fzf.zsh"
 fi
 
+if [ -f /usr/share/doc/fzf/examples/completion.zsh ]; then
+  . /usr/share/doc/fzf/examples/completion.zsh
+fi
+
+if [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+  . /usr/share/doc/fzf/examples/key-bindings.zsh
+fi
+
+if command -v direnv >/dev/null 2>&1; then
+  eval "$(direnv hook zsh)"
+fi
+
 autoload -Uz colors
 colors
 
