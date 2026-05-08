@@ -85,8 +85,25 @@ apt_update_once() {
     return 0
   fi
 
-  as_root apt-get update -yq
+  apt_get update -yq
   APT_UPDATED=1
+}
+
+apt_get() {
+  attempts=0
+  while [ "$attempts" -lt 6 ]; do
+    if as_root apt-get -o DPkg::Lock::Timeout=120 -o APT::Get::Lock-Timeout=120 "$@"; then
+      return 0
+    fi
+
+    attempts=$((attempts + 1))
+    if [ "$attempts" -lt 6 ]; then
+      warn "apt-get $* failed; retrying"
+      sleep 5
+    fi
+  done
+
+  return 1
 }
 
 install_apt_packages() {
@@ -128,7 +145,7 @@ install_apt_packages() {
   fi
 
   # shellcheck disable=SC2086
-  as_root apt-get install -yq $available_packages || warn "apt package install failed: $available_packages"
+  apt_get install -yq $available_packages || warn "apt package install failed: $available_packages"
 }
 
 install_base_tooling() {
@@ -241,7 +258,7 @@ install_docker_cli() {
 
   log "Installing Docker client tooling for $DOCKER_HOST"
   apt_update_once
-  as_root apt-get install -yq ca-certificates curl gnupg
+  apt_get install -yq ca-certificates curl gnupg
   as_root install -m 0755 -d /etc/apt/keyrings
   docker_gpg="${TMPDIR:-/tmp}/docker.asc.$$"
   curl -fsSL -o "$docker_gpg" https://download.docker.com/linux/ubuntu/gpg
@@ -252,7 +269,7 @@ install_docker_cli() {
   printf '%s\n' "deb [arch=$docker_arch signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $docker_codename stable" | as_root tee /etc/apt/sources.list.d/docker.list >/dev/null
   APT_UPDATED=0
   apt_update_once
-  as_root apt-get install -yq docker-ce-cli docker-buildx-plugin docker-compose-plugin
+  apt_get install -yq docker-ce-cli docker-buildx-plugin docker-compose-plugin
 
   wait_for_docker
 }
@@ -297,7 +314,7 @@ install_github_cli() {
     warn "apt update failed; skipping GitHub CLI install"
     return 0
   }
-  if ! as_root apt-get install -yq ca-certificates curl; then
+  if ! apt_get install -yq ca-certificates curl; then
     warn "GitHub CLI prerequisites install failed"
     return 0
   fi
@@ -314,7 +331,7 @@ install_github_cli() {
   printf '%s\n' "deb [arch=$gh_arch signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | as_root tee /etc/apt/sources.list.d/github-cli.list >/dev/null
   APT_UPDATED=0
   apt_update_once
-  as_root apt-get install -yq gh || warn "GitHub CLI install failed"
+  apt_get install -yq gh || warn "GitHub CLI install failed"
 }
 
 install_yq() {
